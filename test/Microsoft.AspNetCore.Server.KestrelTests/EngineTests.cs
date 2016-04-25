@@ -173,7 +173,7 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
         [MemberData(nameof(ConnectionFilterData))]
         public async Task ReuseStreamsOn(ServiceContext testContext)
         {
-            testContext.ServerInformation.PoolingParameters.MaxPooledStreams = 120;
+            testContext.ServerOptions.MaxPooledStreams = 120;
 
             var streamCount = 0;
             var loopCount = 20;
@@ -216,7 +216,7 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
         [MemberData(nameof(ConnectionFilterData))]
         public async Task ReuseStreamsOff(ServiceContext testContext)
         {
-            testContext.ServerInformation.PoolingParameters.MaxPooledStreams = 0;
+            testContext.ServerOptions.MaxPooledStreams = 0;
 
             var streamCount = 0;
             var loopCount = 20;
@@ -1017,6 +1017,38 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
                 // RequestAborted tripped
                 Assert.True(registrationWh.Wait(1000));
             }
+        }
+        
+        [Theory]
+        [MemberData(nameof(ConnectionFilterData))]
+        public async Task NoErrorsLoggedWhenServerEndsConnectionBeforeClient(ServiceContext testContext)
+        {
+            var testLogger = new TestApplicationErrorLogger();
+            testContext.Log = new KestrelTrace(testLogger);
+
+            using (var server = new TestServer(async httpContext =>
+            {
+                var response = httpContext.Response;
+                response.Headers.Clear();
+                response.Headers["Content-Length"] = new[] { "11" };
+                await response.Body.WriteAsync(Encoding.ASCII.GetBytes("Hello World"), 0, 11);
+            }, testContext))
+            {
+                using (var connection = new TestConnection(server.Port))
+                {
+                    await connection.Send(
+                        "GET / HTTP/1.0",
+                        "",
+                        "");
+                    await connection.ReceiveForcedEnd(
+                        "HTTP/1.0 200 OK",
+                        "Content-Length: 11",
+                        "",
+                        "Hello World");
+                }
+            }
+
+            Assert.Equal(0, testLogger.TotalErrorsLogged);
         }
     }
 }

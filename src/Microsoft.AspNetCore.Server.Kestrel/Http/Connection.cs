@@ -30,6 +30,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
         private Frame _frame;
         private ConnectionFilterContext _filterContext;
         private LibuvStream _libuvStream;
+        private FilteredStreamAdapter _filteredStreamAdapter;
+        private Task _readInputTask;
 
         private readonly SocketInput _rawSocketInput;
         private readonly SocketOutput _rawSocketOutput;
@@ -70,7 +72,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
             }
 
             // Don't initialize _frame until SocketInput and SocketOutput are set to their final values.
-            if (ServerInformation.ConnectionFilter == null)
+            if (ServerOptions.ConnectionFilter == null)
             {
                 lock (_stateLock)
                 {
@@ -100,7 +102,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
 
                 try
                 {
-                    ServerInformation.ConnectionFilter.OnConnectionAsync(_filterContext).ContinueWith((task, state) =>
+                    ServerOptions.ConnectionFilter.OnConnectionAsync(_filterContext).ContinueWith((task, state) =>
                     {
                         var connection = (Connection)state;
 
@@ -154,9 +156,9 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
         {
             // Frame.Abort calls user code while this method is always
             // called from a libuv thread.
-            System.Threading.ThreadPool.QueueUserWorkItem(state =>
+            ThreadPool.Run(() =>
             {
-                var connection = (Connection)state;
+                var connection = this;
 
                 lock (connection._stateLock)
                 {
@@ -166,22 +168,29 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                     }
                     else
                     {
-                        connection._frame.Abort();
+                        connection._frame?.Abort();
                     }
                 }
-            }, this);
+            });
         }
 
         // Called on Libuv thread
         public virtual void OnSocketClosed()
         {
-            _rawSocketInput.Dispose();
-
-            // If a connection filter was applied there will be two SocketInputs.
-            // If a connection filter failed, SocketInput will be null.
-            if (SocketInput != null && SocketInput != _rawSocketInput)
+            if (_filteredStreamAdapter != null)
             {
-                SocketInput.Dispose();
+                _filteredStreamAdapter.Abort();
+                _rawSocketInput.IncomingFin();
+                _readInputTask.ContinueWith((task, state) =>
+                {
+                    ((Connection)state)._filterContext.Connection.Dispose();
+                    ((Connection)state)._filteredStreamAdapter.Dispose();
+                    ((Connection)state)._rawSocketInput.Dispose();
+                }, this);
+            }
+            else
+            {
+                _rawSocketInput.Dispose();
             }
 
             lock (_stateLock)
@@ -207,12 +216,12 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
 
                     if (_filterContext.Connection != _libuvStream)
                     {
-                        var filteredStreamAdapter = new FilteredStreamAdapter(_filterContext.Connection, Memory, Log, ThreadPool);
+                        _filteredStreamAdapter = new FilteredStreamAdapter(ConnectionId, _filterContext.Connection, Memory, Log, ThreadPool);
 
-                        SocketInput = filteredStreamAdapter.SocketInput;
-                        SocketOutput = filteredStreamAdapter.SocketOutput;
+                        SocketInput = _filteredStreamAdapter.SocketInput;
+                        SocketOutput = _filteredStreamAdapter.SocketOutput;
 
-                        filteredStreamAdapter.ReadInput();
+                        _readInputTask = _filteredStreamAdapter.ReadInputAsync();
                     }
                     else
                     {

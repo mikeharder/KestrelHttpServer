@@ -10,26 +10,28 @@ using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNetCore.Server.Kestrel.Filter
 {
-    public class FilteredStreamAdapter
+    public class FilteredStreamAdapter : IDisposable
     {
+        private readonly string _connectionId;
         private readonly Stream _filteredStream;
-        private readonly Stream _socketInputStream;
         private readonly IKestrelTrace _log;
         private readonly MemoryPool _memory;
         private MemoryPoolBlock _block;
+        private bool _aborted = false;
 
         public FilteredStreamAdapter(
+            string connectionId,
             Stream filteredStream,
             MemoryPool memory,
             IKestrelTrace logger,
             IThreadPool threadPool)
         {
             SocketInput = new SocketInput(memory, threadPool);
-            SocketOutput = new StreamSocketOutput(filteredStream, memory);
+            SocketOutput = new StreamSocketOutput(connectionId, filteredStream, memory, logger);
 
+            _connectionId = connectionId;
             _log = logger;
             _filteredStream = filteredStream;
-            _socketInputStream = new SocketInputStream(SocketInput);
             _memory = memory;
         }
 
@@ -37,14 +39,33 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Filter
 
         public ISocketOutput SocketOutput { get; private set; }
 
-        public void ReadInput()
+        public Task ReadInputAsync()
         {
             _block = _memory.Lease();
             // Use pooled block for copy
-            _filteredStream.CopyToAsync(_socketInputStream, _block).ContinueWith((task, state) =>
+            return FilterInputAsync(_block).ContinueWith((task, state) =>
             {
                 ((FilteredStreamAdapter)state).OnStreamClose(task);
             }, this);
+        }
+
+        public void Abort()
+        {
+            _aborted = true;
+        }
+
+        public void Dispose()
+        {
+            SocketInput.Dispose();
+        }
+        
+        private async Task FilterInputAsync(MemoryPoolBlock block)
+        {
+            int bytesRead;
+            while ((bytesRead = await _filteredStream.ReadAsync(block.Array, block.Data.Offset, block.Data.Count)) != 0)
+            {
+                SocketInput.IncomingData(block.Array, block.Data.Offset, bytesRead);
+            }
         }
 
         private void OnStreamClose(Task copyAsyncTask)
@@ -61,11 +82,14 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Filter
                 SocketInput.AbortAwaiting();
                 _log.LogError("FilteredStreamAdapter.CopyToAsync canceled.");
             }
+            else if (_aborted)
+            {
+                SocketInput.AbortAwaiting();
+            }
 
             try
             {
-                _filteredStream.Dispose();
-                _socketInputStream.Dispose();
+                SocketInput.IncomingFin();
             }
             catch (Exception ex)
             {
