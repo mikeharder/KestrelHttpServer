@@ -21,19 +21,19 @@ namespace UsesProvidedServerCertificateSelectorEachTime
             _testsCompleted = new int[_tasks];
         }
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
-            var tasks = new Task[_tasks];
+            var tasks = new Task[_tasks + 1];
             for (var i=0; i < _tasks; i++)
             {
                 tasks[i] = RunTests(i);
             }
 
-            var timer = new Timer(PrintResults, state: null, dueTime: 0, period: 1000);
+            tasks[_tasks] = PrintResults();
 
-            Task.WaitAll(tasks);
+            await Task.WhenAny(tasks);
 
-            Console.WriteLine("All test tasks completed.  Press any key to exit.");
+            Console.WriteLine("At least one task completed.  Press any key to exit.");
             Console.ReadLine();
         }
         
@@ -48,22 +48,27 @@ namespace UsesProvidedServerCertificateSelectorEachTime
             }
         }
 
-        private static void PrintResults(object state)
+        private static async Task PrintResults()
         {
-            Console.Clear();
-
-            Console.SetCursorPosition(0, 0);
-
-            Console.WriteLine($"Current Time: {DateTime.Now}");
-
-            for (var i=0; i < _tasks; i++)
+            while (true)
             {
-                Console.WriteLine($"[{i}] Started: {_testsStarted[i]}, Completed: {_testsCompleted[i]}, " +
-                    $"Running: {_testsStarted[i] - _testsCompleted[i]}, LastStarted: {_lastStarted[i]}");
-            }
+                Console.Clear();
 
-            Console.WriteLine($"[TOTAL] Started: {_testsStarted.Sum()}, Completed: {_testsCompleted.Sum()}, " +
-                $"Running: {_testsStarted.Sum() - _testsCompleted.Sum()}, LastStarted: {_lastStarted.Min()}");
+                Console.SetCursorPosition(0, 0);
+
+                Console.WriteLine($"Current Time: {DateTime.Now}");
+
+                for (var i = 0; i < _tasks; i++)
+                {
+                    Console.WriteLine($"[{i}] Started: {_testsStarted[i]}, Completed: {_testsCompleted[i]}, " +
+                        $"Running: {_testsStarted[i] - _testsCompleted[i]}, LastStarted: {_lastStarted[i]}");
+                }
+
+                Console.WriteLine($"[TOTAL] Started: {_testsStarted.Sum()}, Completed: {_testsCompleted.Sum()}, " +
+                    $"Running: {_testsStarted.Sum() - _testsCompleted.Sum()}, LastStarted: {_lastStarted.Min()}");
+
+                await Task.Delay(TimeSpan.FromSeconds(1));
+            }
         }
     }
 }
