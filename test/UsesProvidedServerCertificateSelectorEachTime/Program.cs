@@ -8,7 +8,7 @@ namespace UsesProvidedServerCertificateSelectorEachTime
 {
     class Program
     {
-        private static readonly int _tasks = Environment.ProcessorCount * 2;
+        private static int _tasks = Environment.ProcessorCount * 2;
 
         private static DateTime[] _lastStarted;
         private static int[] _testsStarted;
@@ -23,6 +23,11 @@ namespace UsesProvidedServerCertificateSelectorEachTime
 
         static async Task Main(string[] args)
         {
+            if (args.Length > 0)
+            {
+                _tasks = int.Parse(args[0]);
+            }
+
             var tasks = new Task[_tasks + 1];
             for (var i=0; i < _tasks; i++)
             {
