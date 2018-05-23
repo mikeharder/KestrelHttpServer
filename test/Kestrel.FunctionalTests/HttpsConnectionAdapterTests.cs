@@ -207,7 +207,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
                     })
                 }
             };
-            using (var server = new TestServer(context => Task.CompletedTask, new TestServiceContext(LoggerFactory), listenOptions))
+            using (var server = new TestServer(context => Task.CompletedTask, new TestServiceContext(/*LoggerFactory*/), listenOptions))
             {
                 using (var client = new TcpClient())
                 {

@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>UsesProvidedServerCertificateSelectorEachTime</AssemblyName>
+    <RootNamespace>UsesProvidedServerCertificateSelectorEachTime</RootNamespace>
+    <TargetFramework>netcoreapp2.2</TargetFramework>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <GenerateProgramFile>false</GenerateProgramFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Kestrel.Transport.Libuv.FunctionalTests\Kestrel.Transport.Libuv.FunctionalTests.csproj" />
+  </ItemGroup>
+
+</Project>
