@@ -50,7 +50,12 @@ namespace UsesProvidedServerCertificateSelectorEachTime
 
         private static void PrintResults(object state)
         {
+            Console.Clear();
+
             Console.SetCursorPosition(0, 0);
+
+            Console.WriteLine($"Current Time: {DateTime.Now}");
+
             for (var i=0; i < _tasks; i++)
             {
                 Console.WriteLine($"[{i}] Started: {_testsStarted[i]}, Completed: {_testsCompleted[i]}, " +
