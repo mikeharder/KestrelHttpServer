@@ -14,19 +14,16 @@ namespace UsesProvidedServerCertificateSelectorEachTime
         private static int[] _testsStarted;
         private static int[] _testsCompleted;
 
-        static Program()
-        {
-            _lastStarted = new DateTime[_tasks];
-            _testsStarted = new int[_tasks];
-            _testsCompleted = new int[_tasks];
-        }
-
         static async Task Main(string[] args)
         {
             if (args.Length > 0)
             {
                 _tasks = int.Parse(args[0]);
             }
+
+            _lastStarted = new DateTime[_tasks];
+            _testsStarted = new int[_tasks];
+            _testsCompleted = new int[_tasks];
 
             var tasks = new Task[_tasks + 1];
             for (var i=0; i < _tasks; i++)
